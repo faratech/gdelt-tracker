@@ -1,0 +1,91 @@
+# Comprehensive cache disabling .htaccess
+# Disables caching for CloudFlare, LiteSpeed, Apache, and PHP
+
+# Ensure PHP doesn't cache
+<IfModule mod_php.c>
+    php_flag opcache.enable Off
+    php_flag zlib.output_compression Off
+</IfModule>
+
+# Set PHP headers to disable caching in the script output
+<IfModule mod_headers.c>
+    Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+    Header set Pragma "no-cache"
+    Header set Expires "Wed, 11 Jan 1984 05:00:00 GMT"
+    Header unset ETag
+    
+    # Disable CloudFlare caching
+    Header set Cache-Control "private, no-cache, no-store, max-age=0, must-revalidate, proxy-revalidate"
+    Header set Surrogate-Control "no-store"
+    Header set CF-Cache-Status "BYPASS"
+    
+    # Prevent caching for all file types
+    <FilesMatch "\.(html|htm|php|cgi|pl|js|css|jpg|jpeg|png|gif|webp|svg|ico|xml|txt|json)$">
+        Header set Cache-Control "private, no-cache, no-store, proxy-revalidate, no-transform"
+        Header set Pragma "no-cache"
+    </FilesMatch>
+</IfModule>
+
+# Disable mod_expires
+<IfModule mod_expires.c>
+    ExpiresActive Off
+    ExpiresDefault "access"
+    ExpiresByType text/html "access"
+    ExpiresByType text/css "access"
+    ExpiresByType text/javascript "access"
+    ExpiresByType application/javascript "access"
+    ExpiresByType application/json "access"
+    ExpiresByType image/jpeg "access"
+    ExpiresByType image/png "access"
+    ExpiresByType image/gif "access"
+    ExpiresByType image/svg+xml "access"
+    ExpiresByType image/webp "access"
+    ExpiresByType application/font-woff "access"
+    ExpiresByType application/pdf "access"
+</IfModule>
+
+# Disable caching in LiteSpeed
+<IfModule LiteSpeed>
+    CacheDisable public /
+    CacheLookup off
+    RewriteEngine On
+    RewriteRule .* - [E=Cache-Control:no-cache]
+</IfModule>
+
+# Turn off ETags
+FileETag None
+
+# Disable caching for proxies and CDNs
+<IfModule mod_headers.c>
+    Header set Vary "*"
+    Header append Vary: Accept-Encoding
+    Header set X-Content-Type-Options "nosniff"
+</IfModule>
+
+# Force browser validation every time
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{REQUEST_METHOD} ^(GET|HEAD)$
+    RewriteCond %{QUERY_STRING} !no-cache
+    RewriteRule .* - [E=Cache-Control:no-cache]
+</IfModule>
+
+# Disable asset versioning caches
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{QUERY_STRING} ^(|.*&)v=([^&]+)(&.*|)$
+    RewriteRule ^(.*)$ /v2$1?%1no-cache%3 [L,R=302]
+</IfModule>
+
+# CloudFlare-specific page rules (this is for information only, actual rules need to be set in CloudFlare dashboard)
+# These directives inform CloudFlare about our caching preferences
+<IfModule mod_headers.c>
+    Header set CDN-Cache-Control "no-cache, no-store, must-revalidate"
+    Header set CloudFlare-CDN-Cache-Control "no-cache, no-store, must-revalidate"
+</IfModule>
+
+# Disable mod_deflate compression which can cause caching issues
+<IfModule mod_deflate.c>
+    SetEnv no-gzip 1
+    SetEnv dont-vary 1
+</IfModule>
