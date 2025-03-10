@@ -31,7 +31,7 @@ $timespan = isset($_GET['timespan']) && in_array($_GET['timespan'], ['1h', '6h',
 $country = isset($_GET['country']) ? trim($_GET['country']) : "";
 
 // Execute Python script with proper escaping
-$command = 'python gdelt.py ' . escapeshellarg($keyword) . ' ' . escapeshellarg($timespan);
+$command = 'python src/gdelt.py ' . escapeshellarg($keyword) . ' ' . escapeshellarg($timespan);
 if (!empty($country)) {
     $command .= ' ' . escapeshellarg($country);
 }
