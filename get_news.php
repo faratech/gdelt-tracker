@@ -109,6 +109,12 @@ $timespan = isset($_GET['timespan']) && in_array($_GET['timespan'], ['1h', '6h',
     ? $_GET['timespan']
     : "24h";
 
+// A NUL byte cannot be passed on the command line: escapeshellarg() would throw
+// and the request would end in an uncaught-exception 500 after a slot was taken.
+if (strpos($keyword, "\0") !== false) {
+    send_error(400, "Invalid search term.");
+}
+
 $keyword_length = function_exists('mb_strlen') ? mb_strlen($keyword, 'UTF-8') : strlen($keyword);
 if ($keyword_length > MAX_KEYWORD_LENGTH) {
     send_error(400, "Search term is too long (maximum " . MAX_KEYWORD_LENGTH . " characters).");
