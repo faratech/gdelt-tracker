@@ -344,9 +344,6 @@ document.addEventListener('DOMContentLoaded', function() {
         localStorage.removeItem('welcomeDismissed');
       }
     });
-    
-    // Make showModal available globally for popup clicks
-    window.showModal = showModal;
   }
 
   /**
@@ -548,20 +545,29 @@ document.addEventListener('DOMContentLoaded', function() {
         title: article.title || 'No title'
       });
       
-      marker.bindPopup(`
-        <div style="width:220px;">
-          <h4 style="margin:0 0 8px;font-size:14px;">${article.title || 'No title'}</h4>
-          <p style="margin:0 0 5px;font-size:12px;">${article.sourcecountry} &middot; ${formatTimestamp(article.seendate)}</p>
-          <p style="margin:0;font-size:12px;">${article.domain || 'Unknown source'}</p>
-          <button 
+      // Build the popup as a DOM node so the button gets a real listener
+      // instead of an inline handler with the URL spliced into it
+      const popup = document.createElement('div');
+      popup.style.width = '220px';
+      popup.innerHTML = `
+          <h4 style="margin:0 0 8px;font-size:14px;">${escapeHtml(article.title || 'No title')}</h4>
+          <p style="margin:0 0 5px;font-size:12px;">${escapeHtml(article.sourcecountry)} &middot; ${escapeHtml(formatTimestamp(article.seendate))}</p>
+          <p style="margin:0;font-size:12px;">${escapeHtml(article.domain || 'Unknown source')}</p>
+          <button
             style="width:100%;margin-top:8px;padding:5px;background:#3498db;color:white;border:none;border-radius:3px;cursor:pointer;"
-            onclick="window.open('${article.url}', '_blank')"
           >
             Read Article
           </button>
-        </div>
-      `);
-      
+      `;
+      const articleUrl = safeUrl(article.url);
+      const readButton = popup.querySelector('button');
+      readButton.disabled = !articleUrl;
+      readButton.addEventListener('click', () => {
+        // noopener: the article page gets no handle back to this tab
+        window.open(articleUrl, '_blank', 'noopener,noreferrer');
+      });
+      marker.bindPopup(popup);
+
       state.clusterLayer.addLayer(marker);
     });
   }
@@ -579,6 +585,33 @@ document.addEventListener('DOMContentLoaded', function() {
     // Create markers anyway
     const groupsByCountry = groupArticlesByCountry(articles);
     addMarkers(groupsByCountry);
+  }
+
+  /**
+   * Escape a value for use inside HTML text or a quoted attribute.
+   * Article fields come from third-party publishers via GDELT.
+   */
+  function escapeHtml(value) {
+    if (value === null || value === undefined) return '';
+    return String(value).replace(/[&<>"']/g, ch => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    })[ch]);
+  }
+
+  /**
+   * Return the URL if it is an absolute http(s) URL, otherwise an empty string
+   */
+  function safeUrl(value) {
+    try {
+      const url = new URL(String(value));
+      return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : '';
+    } catch (e) {
+      return '';
+    }
   }
 
   /**
@@ -710,24 +743,24 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         
         // Popup with preview and button to view all articles
-        const popupContent = `
-          <div style="width:220px;">
-            <strong style="font-size:14px;">${country}</strong>
+        const popupContent = document.createElement('div');
+        popupContent.style.width = '220px';
+        popupContent.innerHTML = `
+            <strong style="font-size:14px;">${escapeHtml(country)}</strong>
             <span style="float:right;background:${color};color:white;padding:2px 6px;border-radius:10px;font-size:12px;">${count}</span>
             <hr style="margin:8px 0;border:0;border-top:1px solid #eee;">
             <p style="font-size:12px;margin:0 0 5px;">Top headlines:</p>
             <ul style="padding-left:15px;margin:0;font-size:12px;">
-              ${articles.slice(0, 3).map(a => `<li style="margin-bottom:3px;">${a.title || 'Untitled article'}</li>`).join('')}
+              ${articles.slice(0, 3).map(a => `<li style="margin-bottom:3px;">${escapeHtml(a.title || 'Untitled article')}</li>`).join('')}
               ${count > 3 ? `<li style="font-style:italic;">And ${count - 3} more articles...</li>` : ''}
             </ul>
-            <button 
+            <button
               style="width:100%;margin-top:8px;padding:5px;background:#3498db;color:white;border:none;border-radius:3px;cursor:pointer;"
-              onclick="showModal('${country}')"
             >
               View All Articles
             </button>
-          </div>
         `;
+        popupContent.querySelector('button').addEventListener('click', () => showModal(country));
 
         marker.bindPopup(popupContent);
         
@@ -792,29 +825,31 @@ document.addEventListener('DOMContentLoaded', function() {
       articleDiv.classList.add('article');
       
       const content = article.content || article.excerpt || 'No additional content available.';
-      
+      const imageUrl = safeUrl(article.socialimage);
+      const articleUrl = safeUrl(article.url);
+
       articleDiv.innerHTML = `
         <div class="article-header">
-          ${article.socialimage ? 
-            `<img src="${article.socialimage}" alt="Article image" class="article-image">` : 
+          ${imageUrl ?
+            `<img src="${escapeHtml(imageUrl)}" alt="Article image" class="article-image">` :
             '<div class="article-image"></div>'
           }
           <div class="article-title">
-            <h3>${article.title || 'No title'}</h3>
+            <h3>${escapeHtml(article.title || 'No title')}</h3>
           </div>
         </div>
         <div class="article-meta">
-          <span>${formatTimestamp(article.seendate)}</span>
+          <span>${escapeHtml(formatTimestamp(article.seendate))}</span>
           <div class="article-source">
             <i class="fas fa-link"></i>
-            <span>${article.domain || 'Unknown source'}</span>
+            <span>${escapeHtml(article.domain || 'Unknown source')}</span>
           </div>
         </div>
         <div class="article-content">
-          <p>${content}</p>
+          <p>${escapeHtml(content)}</p>
         </div>
         <div class="article-actions">
-          <a href="${article.url}" target="_blank" class="article-btn">
+          <a ${articleUrl ? `href="${escapeHtml(articleUrl)}"` : ''} target="_blank" rel="noopener noreferrer" class="article-btn">
             <i class="fas fa-external-link-alt"></i>
             Read Full Article
           </a>
@@ -947,32 +982,36 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   /**
+   * Format one CSV field. Text that a spreadsheet would read as a formula
+   * (leading =, +, -, @, tab or CR) gets a leading apostrophe, and fields with
+   * quotes, commas or line breaks are quoted.
+   */
+  function csvField(value) {
+    if (value === null || value === undefined) return '';
+    let text = String(value);
+    if (typeof value !== 'number' && /^[=+\-@\t\r]/.test(text)) {
+      text = "'" + text;
+    }
+    if (/[",\r\n]/.test(text)) {
+      text = '"' + text.replace(/"/g, '""') + '"';
+    }
+    return text;
+  }
+
+  /**
    * Export data as CSV file
    */
   function exportCSVFile(data, filename) {
     // Extract column headers from first item
     const firstItem = data[0];
     const headers = Object.keys(firstItem);
-    
+
     // Create CSV content
-    let csvContent = headers.join(',') + '\n';
-    
+    let csvContent = headers.map(csvField).join(',') + '\n';
+
     // Add each row
     data.forEach(item => {
-      const row = headers.map(header => {
-        // Ensure values are properly quoted
-        let value = item[header];
-        if (value === null || value === undefined) {
-          value = '';
-        } else {
-          value = String(value);
-          // Escape quotes and wrap in quotes if contains comma or quote
-          if (value.includes('"') || value.includes(',')) {
-            value = '"' + value.replace(/"/g, '""') + '"';
-          }
-        }
-        return value;
-      });
+      const row = headers.map(header => csvField(item[header]));
       csvContent += row.join(',') + '\n';
     });
     
@@ -1046,7 +1085,7 @@ document.addEventListener('DOMContentLoaded', function() {
         elements.newsFeed.innerHTML = `
           <div class="no-results">
             <i class="fas fa-search"></i>
-            <p>No results found for "${keyword}". Try different search terms or time range.</p>
+            <p>No results found for "${escapeHtml(keyword)}". Try different search terms or time range.</p>
           </div>
         `;
         state.markersLayer.clearLayers();
@@ -1163,7 +1202,7 @@ document.addEventListener('DOMContentLoaded', function() {
       elements.newsFeed.innerHTML = `
         <div class="no-results">
           <i class="fas fa-search"></i>
-          <p>No results found for "${state.currentQuery.keyword}". Try different search terms or time range.</p>
+          <p>No results found for "${escapeHtml(state.currentQuery.keyword)}". Try different search terms or time range.</p>
         </div>
       `;
       elements.feedPagination.innerHTML = '';
@@ -1183,29 +1222,32 @@ document.addEventListener('DOMContentLoaded', function() {
         articleDiv.appendChild(countryTag);
       }
       
+      const imageUrl = safeUrl(article.socialimage);
+      const articleUrl = safeUrl(article.url);
+
       articleDiv.innerHTML += `
         <div class="article-header">
-          ${article.socialimage ? 
-            `<img src="${article.socialimage}" alt="Article image" class="article-image">` : 
+          ${imageUrl ?
+            `<img src="${escapeHtml(imageUrl)}" alt="Article image" class="article-image">` :
             '<div class="article-image"></div>'
           }
           <div class="article-title">
-            <h3>${article.title || 'No title'}</h3>
+            <h3>${escapeHtml(article.title || 'No title')}</h3>
           </div>
         </div>
         <div class="article-meta">
-          <span>${formatTimestamp(article.seendate)}</span>
+          <span>${escapeHtml(formatTimestamp(article.seendate))}</span>
           <div class="article-source">
             <i class="fas fa-link"></i>
-            <span>${article.domain || 'Unknown source'}</span>
+            <span>${escapeHtml(article.domain || 'Unknown source')}</span>
           </div>
         </div>
         <div class="article-actions">
-          <a href="${article.url}" target="_blank" class="article-btn">
+          <a ${articleUrl ? `href="${escapeHtml(articleUrl)}"` : ''} target="_blank" rel="noopener noreferrer" class="article-btn">
             <i class="fas fa-external-link-alt"></i>
             Read Article
           </a>
-          <button class="article-btn" data-country="${article.sourcecountry}">
+          <button class="article-btn" data-country="${escapeHtml(article.sourcecountry)}">
             <i class="fas fa-map-marker-alt"></i>
             View on Map
           </button>
